@@ -11,11 +11,11 @@
 [![smithery badge](https://smithery.ai/badge/philidor/defi)](https://smithery.ai/servers/philidor/defi)
 [![LobeHub](https://lobehub.com/badge/mcp/philidor-labs-philidor-mcp)](https://lobehub.com/mcp/philidor-labs-philidor-mcp)
 
-Search 700+ DeFi vaults across Morpho, Aave, Yearn, Beefy, and Spark. Compare risk scores, analyze protocols, run due diligence &mdash; all through natural language.
+Search 1,000+ DeFi vaults and lending markets across 12 chains and 10 protocols &mdash; Morpho, Aave (v3/v4), Spark, Uniswap, Maple, Kamino, Compound, Yearn, Nest, and Beefy. Compare risk scores, underwrite loop venues, run due diligence &mdash; all through natural language.
 
 **No API key required. No installation needed.**
 
-[Quick Start](#quick-start) &bull; [Cursor Plugin](#cursor-marketplace-plugin) &bull; [Tools](#tools) &bull; [Example Prompts](#example-prompts) &bull; [Risk Framework](#risk-scoring) &bull; [Agent Skill](#agent-skill)
+[Quick Start](#quick-start) &bull; [Coverage](#supported-coverage) &bull; [Cursor Plugin](#cursor-marketplace-plugin) &bull; [Tools](#tools) &bull; [Example Prompts](#example-prompts) &bull; [Risk Framework](#risk-scoring) &bull; [Agent Skill](#agent-skill)
 
 </div>
 
@@ -28,12 +28,16 @@ Most DeFi data tools give you raw numbers. Philidor gives your AI agent **instit
 | Feature | Philidor | DefiLlama MCP | Generic DeFi APIs |
 |---|:---:|:---:|:---:|
 | Vault risk scores (0&ndash;10) | :white_check_mark: | :x: | :x: |
-| Risk vector decomposition | :white_check_mark: | :x: | :x: |
+| Four-vector risk breakdown | :white_check_mark: | :x: | :x: |
+| Lending markets &amp; Aave V4 hubs | :white_check_mark: | :x: | Partial |
+| Loop venue underwriting | :white_check_mark: | :x: | :x: |
 | Vault comparison | :white_check_mark: | :x: | :x: |
 | Curator intelligence | :white_check_mark: | :x: | :x: |
 | Protocol security history | :white_check_mark: | :x: | Partial |
+| Incident watchlist | :white_check_mark: | :x: | :x: |
 | Due diligence prompts | :white_check_mark: | :x: | :x: |
 | Portfolio risk assessment | :white_check_mark: | :x: | :x: |
+| Solana / Kamino coverage | :white_check_mark: | Partial | Varies |
 | No API key needed | :white_check_mark: | :white_check_mark: | Varies |
 | Hosted (zero install) | :white_check_mark: | :x: | :x: |
 
@@ -250,9 +254,9 @@ List all vaults that had a recent critical incident (last 365 days). Sorted by T
 
 | URI | Description |
 |---|---|
-| `philidor://methodology` | The Vector Risk Framework v4.1 documentation |
-| `philidor://supported-chains` | Supported blockchain networks with vault counts |
-| `philidor://supported-protocols` | Supported DeFi protocols with TVL data |
+| `philidor://methodology` | Live Vector Risk Framework (four vectors, caps, suitability) |
+| `philidor://supported-chains` | Live chain list with vault counts, TVL, and CAIP-2 ids |
+| `philidor://supported-protocols` | Live protocol list with vault counts and TVL |
 
 ## Prompts
 
@@ -275,7 +279,17 @@ Once connected, try asking your AI assistant:
 
 > "What Morpho vaults are available on Base?"
 
+> "Show me Kamino vaults on Solana sorted by TVL"
+
 > "Show me the DeFi market overview"
+
+**Markets &amp; loops**
+
+> "List the largest Aave V4 markets by supplied value"
+
+> "Check looping weETH against USDC on Aave V4 Ethereum Main"
+
+> "Any recent risk events on that market?"
 
 **Analysis**
 
@@ -289,7 +303,7 @@ Once connected, try asking your AI assistant:
 
 > "Assess my portfolio: 50% in Morpho Steakhouse USDC, 30% in Aave USDC, 20% in Yearn USDC"
 
-> "Which protocols have had security incidents?"
+> "Which vaults had a critical incident in the last year?"
 
 > "What does a risk score of 8.5 mean?"
 
@@ -297,42 +311,37 @@ Once connected, try asking your AI assistant:
 
 ## Risk Scoring
 
-Philidor uses the **Vector Risk Framework v4.1** to decompose vault risk into three measurable vectors:
+Philidor uses the **Vector Risk Framework** to score vaults on a 0&ndash;10 scale. The score is a relative resilience measure under the active methodology and evidence state &mdash; not a safety guarantee, return guarantee, or investment recommendation.
 
 ```
-Final Score = 40% Asset + 40% Platform + 20% Governance
+Final Score = 30% Asset + 30% Platform & Strategy + 20% Control & Governance + 20% History
 ```
 
-### Asset Composition (40%)
+### Asset Composition (30%)
 
-Quality of underlying collateral. Blue-chip assets (ETH, USDC) score highest. Factors include oracle reliability, liquidity depth, and peg stability.
+Category-specific dimensions with non-compensatory caps (review status, hard-fail flags, evidence freshness, overrides, staleness). Reviewed assets can reach 10.0; provisional cap at 9.0; unreviewed at 7.9.
 
-### Platform Code (40%)
+### Platform and Strategy (30%)
 
-Code maturity measured by:
+Maturity, audits, strategy risk, dependency penalties, and incident caps. Dependencies use a worst-of model (Prime 0.95x, Core 0.80x, Edge 0.50x) plus a per-dependency count discount.
 
-- **Lindy Score** &mdash; time-based safety (>2 years &asymp; 9/10)
-- **Audit Density** &mdash; number and quality of audits
-- **Dependency Risk** &mdash; multiplicative penalties for risky dependencies
-- **Incident Penalty** &mdash; caps score after security incidents
+### Control and Governance (20%)
 
-### Governance (20%)
+On EVM: timelock, immutability, pause controls, and depositor reaction window. On Solana: program upgrade authority (including burned authorities and resolvable multisigs) and market emergency powers, worst-program-first across every program a vault depends on.
 
-Exit window for users:
+### History (20%)
 
-| Control | Score |
-|---|---|
-| Immutable contract | 10/10 |
-| 7+ day timelock | 9/10 |
-| No timelock | 1/10 |
+Recent instability and confirmed loss history from vault-scoped Critical/Warning incident-class events over a 365-day window. Low history scores apply post-composite ceilings (e.g. History &lt; 4.0 caps the vault at 4.9).
 
 ### Risk Tiers
 
 | Tier | Score | Meaning |
 |---|---|---|
-| **Prime** | 8.0&ndash;10.0 | Institutional-grade &mdash; mature code, multiple audits, safe governance |
-| **Core** | 5.0&ndash;7.9 | Moderate safety &mdash; audited but newer or flexible governance |
-| **Edge** | 0.0&ndash;4.9 | Higher risk &mdash; requires careful due diligence |
+| **Prime** | 8.0&ndash;10.0 | Highest published resilience band under the active methodology |
+| **Core** | 5.0&ndash;7.9 | Mid band &mdash; audited but newer, thinner evidence, or more flexible controls |
+| **Edge** | 0.0&ndash;4.9 | Higher assessed risk &mdash; requires careful due diligence |
+
+Suitability labels (`institutional`, `qualified`, `speculative`, `not_assessed`) add review status, confidence, and flag constraints on top of the score range. Full detail: `philidor://methodology` or [docs methodology](https://docs.philidor.io/docs/methodology).
 
 ---
 
@@ -354,7 +363,7 @@ Exit window for users:
 - **Transport**: Streamable HTTP (remote) or stdio (local/Docker)
 - **API**: Calls the [Philidor Public API](https://api.philidor.io/v1/docs) &mdash; no API key needed
 - **Stateless**: Fresh server instance per request, no session state
-- **Data**: 700+ vaults across Ethereum, Base, Arbitrum, Polygon, Optimism, and Avalanche
+- **Data**: 1,000+ vaults / markets across 12 chains and 10 protocols (see [Coverage](#supported-coverage); live counts via MCP resources)
 
 ---
 
@@ -446,11 +455,47 @@ This gives your agent full knowledge of all tools, resources, prompts, recommend
 
 ---
 
-## Supported Protocols
+## Supported Coverage
 
-Morpho, Aave (v3/v4), Spark, Compound, Yearn, Beefy, Uniswap, Nest, Maple, Kamino &mdash; with more being added regularly.
+Live snapshot from the hosted MCP (`get_market_overview` + `philidor://supported-chains` / `philidor://supported-protocols`). Counts and TVL move with the market &mdash; those resources are authoritative.
 
-See the full list at [app.philidor.io](https://app.philidor.io).
+**~1,085 vaults · ~$59B TVL · 12 chains · 10 protocols · 23 curators**
+
+### Chains
+
+| Chain | Slug | Notes |
+|---|---|---|
+| Ethereum | `ethereum` | Largest coverage (Aave, Morpho, Spark, …) |
+| Base | `base` | Morpho / Aave / Yearn / Beefy |
+| Plasma | `plasma` | EVM |
+| Arbitrum | `arbitrum` | EVM L2 |
+| Solana | `solana` | Kamino (base58 addresses) |
+| Monad | `monad` | EVM |
+| Avalanche | `avalanche` | EVM |
+| Optimism | `optimism` | EVM L2 |
+| Polygon | `polygon` | EVM |
+| Plume | `plume` | EVM / RWA-oriented |
+| Stable | `stable` | EVM |
+| Linea | `linea` | EVM L2 |
+
+Chain filters accept the integer chain id or the slug. Addresses are `0x` hex on EVM and base58 (case-sensitive) on Solana.
+
+### Protocols
+
+| Protocol | ID | Surface |
+|---|---|---|
+| Aave | `aave` | Vaults + lending markets (v3 / v4 hubs &amp; spokes) |
+| Spark | `spark` | Vaults + lending markets |
+| Morpho | `morpho` | Vaults + Morpho Blue market pairs |
+| Uniswap | `uniswap` | Vaults |
+| Maple Finance | `maple` | Vaults |
+| Kamino | `kamino` | Solana vaults + K-Lend markets |
+| Compound | `compound` | Vaults + Comet markets |
+| Yearn | `yearn` | Vaults |
+| Nest | `nest` | Vaults |
+| Beefy | `beefy` | Vaults |
+
+Lending-market tools (`list_markets`, `get_market`, `get_market_events`, `check_loop_venue`) cover Aave, Spark, Compound, Morpho, and Kamino. Explore the product UI at [app.philidor.io](https://app.philidor.io).
 
 ---
 
