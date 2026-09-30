@@ -1,60 +1,107 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-const METHODOLOGY_CONTENT = `# The Vector Risk Framework v2.0
+const METHODOLOGY_CONTENT = `# The Vector Risk Framework
 
-Philidor Analytics assesses DeFi vaults using a data-driven approach, decomposing every vault into three fundamental Risk Vectors using objective on-chain metrics.
+Philidor scores DeFi vault risk on a 0-10 scale using four vectors:
 
-## Philosophy
-Subjective labels like "Blue Chip" are prone to bias. Philidor replaces opinions with measurable facts. Instead of "This protocol is safe", we say "This protocol has been live for 1,400 days with 5 independent audits."
+- Asset Composition: 30%
+- Platform and Strategy: 30%
+- Control and Governance: 20%
+- History: 20%
 
-## Vector 1: Asset Composition (40% weight)
-Categorizes assets by collateral quality:
-- Spot exposure: 10/10
-- Blue-chip collateral (ETH, WBTC, USDC, USDT, DAI): 10/10
-- Established collateral (LSTs, secondary stables): 8/10
-- Other collateral (less liquid): 5/10
+## Score Meaning
 
-## Vector 2: Platform Code (40% weight)
-Measures code safety:
+The score is a relative resilience measure under the active methodology and evidence state. It is not a safety guarantee, return guarantee, or investment recommendation.
 
-### Lindy Score (time-based safety)
-- >2 Years: ~9/10
-- >1 Year: ~7/10
-- <6 Months: <4/10
+## Asset Methodology
 
-### Audit Density
-- Baseline: 1 audit mandatory
-- Standard audit: +1 point
-- Contest audit: +2 points
+Asset scoring uses category-specific dimensions and applies non-compensatory caps.
 
-### Dependency Risk (multiplicative penalties)
-- Prime dependency (8+): 0.95x
-- Core dependency (5-7): 0.80x
-- Edge dependency (<5): 0.50x
+final_asset_score = min(
+  weighted_dimension_score,
+  overlay_cap,
+  review_status_cap,
+  hard_fail_cap,
+  override_cap,
+  staleness_cap
+)
 
-### Incident Penalty (caps final score)
-- <30 days: capped at 2
-- <90 days: capped at 5
-- <180 days: capped at 8
+Key controls include:
 
-## Vector 3: Governance (20% weight)
-Measures exit window:
-- Immutable contract: 10/10
-- Timelock >= 7 days: 9/10
-- Timelock >= 48h: 8/10
-- Timelock >= 24h: 5/10
-- Timelock < 24h: 1/10
+- review status caps of reviewed 10.0, provisional 9.0, and unreviewed 7.9
+- hard-fail flags with cooldown behavior
+- evidence freshness penalties and staleness caps
+- unresolved-address conservative fallback
+- concentration and wrong-way portfolio adjustments at vault level
 
-## Final Score & Tiers
-Formula: 40% Asset + 40% Platform + 20% Control
+Expired evidence is reduced to 75% of the last observed value with no floor. When more than half of weighted evidence is stale or expired, the asset score is capped at 8.0.
 
-- Prime (8.0-10.0): Mature code (>2y), multiple audits, safe governance
-- Core (5.0-7.9): Audited but newer or flexible governance
-- Edge (0.0-4.9): High risk — unaudited, very new, or instant admin powers
+## Platform And Strategy
 
-### Hard Disqualifications (capped at Edge/4.9)
-- No audit exists for protocol version
-- Platform score is 0`;
+Platform and Strategy is a deterministic 30% component based on maturity, audits, strategy risk, dependency penalties, and incident caps.
+
+Dependencies use a worst-of model. The platform score is bounded by the weakest dependency safety factor, with Prime at 0.95x, Core at 0.80x, and Edge at 0.50x, plus a 3% count discount per additional dependency with a 0.85 floor.
+
+Missing audits zero the audit component of this vector in the current scoring path.
+
+## Control And Governance
+
+Control and Governance is a deterministic 20% component based primarily on timelock, immutability, pause controls, and depositor reaction window (EVM chains). On Solana the same vector scores captured on-chain control evidence instead: program upgrade authority (including burned authorities and resolvable multisigs) and market emergency powers, worst-program-first across every program a vault depends on. Oracle attribution on Solana walks Kamino's Scope aggregator chains with worst-of scoring; Scope/Switchboard-attributed feeds score 6 and unresolved attribution scores 2. Full detail: https://docs.philidor.io/docs/methodology/governance-vector and https://docs.philidor.io/docs/reference/oracle-providers
+
+## History
+
+History is a deterministic 20% component based on recent instability and confirmed loss history.
+
+History consumes vault-scoped Critical and Warning events of the incident-class allowlist (realized adverse events: incidents, bad debt, emergency pauses/shutdowns, detected proxy mutations) over a 365-day window — governance and cap-management events are priced by the Control and concentration vectors instead (methodology v4). RatingChange events are excluded. Confirmed lifetime Critical loss events carry a capped non-decaying penalty.
+
+History also applies a post-composite ceiling:
+
+- History below 4.0 caps the vault at 4.9
+- History below 7.0 caps the vault at 7.5
+- History at or above 7.0 applies no history ceiling
+
+## Composite
+
+raw_total = 0.30 * asset_vector
+  + 0.30 * platform_vector
+  + 0.20 * control_vector
+  + 0.20 * history_vector
+
+final_total = post_composite_ceilings(raw_total)
+
+Post-composite ceilings are applied in order: asset-quality drag, history ceiling, vault-level override, then active-incident ceiling.
+
+Asset-quality drag uses assetQualityAnchor, which includes caps but excludes LLTV haircuts and portfolio adjustments.
+
+## Tiers And Suitability
+
+Tier mapping:
+
+- Prime: 8.0-10.0
+- Core: 5.0-7.9
+- Edge: 0.0-4.9
+
+Published tiers use stability dwell. Promotions dwell for 6 hours, demotions dwell for 24 hours, and hard floors publish severe deterioration immediately.
+
+Suitability labels:
+
+- institutional
+- qualified
+- speculative
+- not_assessed
+
+Suitability adds review status, confidence, and flag constraints on top of score range.
+
+## Governance And Reliability
+
+The framework includes:
+
+- bitemporal asset records and point-in-time lookups
+- maker-checker approval workflow for score-affecting changes
+- evidence lineage
+- score run provenance
+- fail-safe modes of normal, degraded, and fail_closed
+`;
 
 export function registerMethodologyResource(server: McpServer) {
   server.resource(
@@ -62,7 +109,7 @@ export function registerMethodologyResource(server: McpServer) {
     'philidor://methodology',
     {
       description:
-        'The Vector Risk Framework v2.0 methodology used by Philidor to score DeFi vault risk.',
+        'The Vector Risk Framework methodology used by Philidor to score DeFi vault risk.',
     },
     async (uri) => ({
       contents: [
